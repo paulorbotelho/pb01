@@ -1,23 +1,33 @@
-// 1. Inicializar Ícones
-lucide.createIcons();
+// 1. Registro de Plugins (No topo para evitar erros de referência)
+// Movido para dentro do DOMContentLoaded para garantir carregamento de CDNs
+function initializeScripts() {
+    gsap.registerPlugin(ScrollTrigger);
+    if (window.lucide) {
+        lucide.createIcons();
+    }
+}
 
-// 2. Smooth Scrolling (Lenis)
+// 2. Smooth Scrolling (Lenis) Otimizado
 const lenis = new Lenis({
     duration: 1.2,
     easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-    direction: 'vertical',
-    gestureDirection: 'vertical',
-    smooth: true,
-    mouseMultiplier: 1,
-    touchMultiplier: 2,
+    orientation: 'vertical',
+    gestureOrientation: 'vertical',
+    smoothWheel: true,
+    wheelMultiplier: 1,
+    touchMultiplier: 1.5,
 })
-function raf(time) {
-    lenis.raf(time)
-    requestAnimationFrame(raf)
-}
-requestAnimationFrame(raf)
 
-// Handler para links internos (Smooth Scroll a ancoras)
+// Sincronização Lenis + ScrollTrigger
+lenis.on('scroll', ScrollTrigger.update);
+
+function raf(time) {
+    lenis.raf(time);
+    requestAnimationFrame(raf);
+}
+requestAnimationFrame(raf);
+
+// 3. Handlers de Navegação
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
         e.preventDefault();
@@ -26,7 +36,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         const targetElement = document.querySelector(targetId);
         if (targetElement) {
             lenis.scrollTo(targetElement, {
-                offset: -20, // pequeno offset para não colar no topo
+                offset: -20,
                 duration: 1.5,
                 easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t))
             });
@@ -34,11 +44,16 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     });
 });
 
-// 3. Animações de Entrada (GSAP)
-document.addEventListener("DOMContentLoaded", () => {
-    gsap.registerPlugin(ScrollTrigger);
+// 4. Animações de Entrada (GSAP)
+function startAnimations() {
+    initializeScripts();
+    // Forçar aceleração de hardware
+    gsap.set(".hero-content > *, #photo-frame, .about-visual, .about-content > *, .project-cards > *", { 
+        force3D: true, 
+        backfaceVisibility: "hidden" 
+    });
 
-    // Textos e botões subindo
+    // --- Hero Animations ---
     gsap.from(".hero-content > *", {
         y: 40,
         opacity: 0,
@@ -48,120 +63,124 @@ document.addEventListener("DOMContentLoaded", () => {
         delay: 0.1
     });
 
-    // Imagem e bloco visual
     gsap.from(".hero-visual", {
         opacity: 0,
-        filter: "blur(10px)",
         duration: 1.5,
         ease: "power2.out",
         delay: 0.3
     });
 
     gsap.from("#photo-frame", {
-        scale: 0.9,
+        scale: 0.95,
         y: 20,
+        opacity: 0,
         duration: 1.5,
         ease: "expo.out",
         delay: 0.5
     });
 
-    // --- ScrollTrigger: Revealing da Seção Sobre Mim ---
+    // --- About Section ---
     gsap.from(".about-visual", {
         scrollTrigger: {
             trigger: "#sobre",
-            start: "top 75%",
+            start: "top 90%",
             once: true
         },
-        x: -50,
+        x: -30,
         opacity: 0,
-        duration: 1.5,
+        duration: 1.2,
         ease: "power3.out"
     });
 
     gsap.from(".about-content > *", {
         scrollTrigger: {
             trigger: "#sobre",
-            start: "top 80%",
+            start: "top 90%",
             once: true
         },
-        y: 40,
+        y: 30,
         opacity: 0,
         duration: 1,
-        stagger: 0.15,
+        stagger: 0.1,
         ease: "power2.out"
     });
 
-    // --- Projetos Section Animations ---
-    gsap.from("#projetos > div:not(.absolute)", {
-        scrollTrigger: {
-            trigger: "#projetos",
-            start: "top 80%",
-            once: true
-        },
-        y: 40,
-        opacity: 0,
-        duration: 1,
-        stagger: 0.3,
-        ease: "power2.out"
-    });
+    // --- Projects Section ---
+    const cards = document.querySelectorAll('.project-cards > a');
+    if (cards.length > 0) {
+        gsap.from(cards, {
+            scrollTrigger: {
+                trigger: ".project-cards",
+                start: "top 95%",
+                once: true,
+            },
+            y: 50,
+            opacity: 0,
+            duration: 1.2,
+            stagger: 0.2,
+            ease: "power2.out",
+            clearProps: "all"
+        });
+    }
 
-    // --- Footer Animations ---
+    // --- Footer ---
     gsap.from("footer .footer-content > *", {
         scrollTrigger: {
             trigger: "footer",
-            start: "top 80%",
+            start: "top 95%",
             once: true
         },
-        y: 40,
+        y: 30,
         opacity: 0,
         duration: 1,
-        stagger: 0.15,
+        stagger: 0.1,
         ease: "power2.out"
     });
 
-    // 4. Interações de Mouse (Tilt & Parallax)
+    // 5. Mouse Interaction
     const mainContainer = document.querySelector('main');
-    const parallaxEls = document.querySelectorAll('.parallax-el');
-    const tiltContainer = document.getElementById('tilt-container');
+    const tiltCard = document.getElementById('tilt-container');
+    const parallaxIcons = document.querySelectorAll('.parallax-el');
 
-    if (mainContainer && tiltContainer) {
+    if (mainContainer && tiltCard) {
         mainContainer.addEventListener('mousemove', (e) => {
             const rect = mainContainer.getBoundingClientRect();
-            const xAxis = (rect.width / 2 - (e.clientX - rect.left));
-            const yAxis = (rect.height / 2 - (e.clientY - rect.top));
+            const mouseX = (e.clientX - rect.left) / rect.width * 2 - 1;
+            const mouseY = (e.clientY - rect.top) / rect.height * 2 - 1;
 
-            // Efeito Parallax nos Badges
-            parallaxEls.forEach(el => {
-                const speed = parseFloat(el.getAttribute('data-speed'));
+            gsap.to(tiltCard, {
+                rotationY: mouseX * 8,
+                rotationX: -mouseY * 8,
+                duration: 1.2,
+                ease: "power2.out",
+                overwrite: "auto"
+            });
+
+            parallaxIcons.forEach(el => {
+                const speed = parseFloat(el.getAttribute('data-speed')) * 50; 
                 gsap.to(el, {
-                    x: xAxis * speed,
-                    y: yAxis * speed,
-                    duration: 1,
-                    ease: "power2.out"
+                    x: -mouseX * speed,
+                    y: -mouseY * speed,
+                    duration: 1.5,
+                    ease: "power2.out",
+                    overwrite: "auto"
                 });
             });
-
-            // Tilt sutil na imagem principal
-            gsap.to(tiltContainer, {
-                rotationY: (xAxis / rect.width) * 10,
-                rotationX: -(yAxis / rect.height) * 10,
-                duration: 1.5,
-                ease: "power2.out",
-                transformPerspective: 1000
-            });
         });
 
-        // Resetar posição quando o mouse sai
         mainContainer.addEventListener('mouseleave', () => {
-            parallaxEls.forEach(el => {
-                gsap.to(el, { x: 0, y: 0, duration: 1.5, ease: "power2.out" });
-            });
-            gsap.to(tiltContainer, {
-                rotationY: 0,
-                rotationX: 0,
-                duration: 1.5,
-                ease: "power2.out"
-            });
+            gsap.to(tiltCard, { rotationY: 0, rotationX: 0, duration: 2, ease: "elastic.out(1, 0.3)" });
+            parallaxIcons.forEach(el => gsap.to(el, { x: 0, y: 0, duration: 2, ease: "power2.out" }));
         });
     }
-});
+
+    ScrollTrigger.refresh();
+}
+
+// Inicialização segura
+if (document.readyState === 'loading') {
+    document.addEventListener("DOMContentLoaded", startAnimations);
+} else {
+    startAnimations();
+}
+
